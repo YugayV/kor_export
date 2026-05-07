@@ -1,0 +1,17 @@
+{
+  "name": "Калькулятор авто из Кореи",
+  "short_name": "Авто Кальк",
+  "description": "Расчёт цены авто из Кореи по аналогии с tks.ru",
+  "start_url": "/exp_korbot/index.html",
+  "display": "standalone",
+  "background_color": "#0f0c29",
+  "theme_color": "#0f0c29",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%230f0c29' width='100' height='100' rx='20'/><text x='50' y='60' font-size='50' text-anchor='middle'>🚗</text></svg>",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    }
+  ]
+}

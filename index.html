@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0f0c29">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>🚗 Калькулятор авто из Кореи</title>
+    <link rel="manifest" href="manifest.json">
+    <style>
+        * { box-sizing: border-box; font-family: 'Segoe UI', -apple-system, sans-serif; }
+        body {
+            background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+            min-height: 100vh;
+            margin: 0;
+            padding: 15px;
+            color: #fff;
+        }
+        .container { max-width: 100%; margin: 0 auto; }
+        h1 {
+            text-align: center;
+            font-size: 22px;
+            margin-bottom: 5px;
+            background: linear-gradient(135deg, #00d4ff, #00ff88);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .subtitle {
+            text-align: center;
+            color: #888;
+            margin-bottom: 20px;
+            font-size: 12px;
+        }
+        .card {
+            background: rgba(255,255,255,0.08);
+            border-radius: 16px;
+            padding: 15px;
+            margin-bottom: 12px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .card h3 {
+            margin: 0 0 12px 0;
+            color: #00d4ff;
+            font-size: 13px;
+            border-bottom: 1px solid rgba(0,212,255,0.3);
+            padding-bottom: 6px;
+        }
+        .input-group { margin-bottom: 10px; }
+        .input-group label {
+            display: block;
+            margin-bottom: 4px;
+            color: #aaa;
+            font-size: 11px;
+        }
+        .input-group input, .input-group select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid rgba(255,255,255,0.15);
+            border-radius: 8px;
+            background: rgba(255,255,255,0.05);
+            color: #fff;
+            font-size: 16px;
+            -webkit-appearance: none;
+        }
+        .input-group input:focus {
+            outline: none;
+            border-color: #00d4ff;
+        }
+        .row { display: flex; gap: 10px; }
+        .row .input-group { flex: 1; }
+        
+        .btn {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #00d4ff, #0099cc);
+            border: none;
+            border-radius: 10px;
+            color: #fff;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        
+        .result {
+            background: linear-gradient(135deg, rgba(0,212,255,0.15), rgba(0,255,136,0.1));
+            border: 2px solid #00ff88;
+            border-radius: 16px;
+            padding: 20px;
+            text-align: center;
+            display: none;
+        }
+        .result.show { display: block; }
+        .result h3 {
+            margin: 0 0 5px 0;
+            color: #00d4ff;
+            font-size: 12px;
+        }
+        .result .price {
+            font-size: 32px;
+            font-weight: bold;
+            color: #00ff88;
+            margin: 10px 0;
+        }
+        
+        .tabs {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 12px;
+        }
+        .tab {
+            flex: 1;
+            padding: 8px 4px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 8px;
+            color: #888;
+            cursor: pointer;
+            font-size: 9px;
+            transition: all 0.3s;
+            text-align: center;
+        }
+        .tab.active {
+            background: rgba(0,212,255,0.3);
+            border-color: #00d4ff;
+            color: #fff;
+        }
+        
+        .breakdown {
+            text-align: left;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(255,255,255,0.2);
+            font-size: 11px;
+        }
+        .breakdown div {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .breakdown .label { color: #888; }
+        .breakdown .value { color: #fff; }
+        .breakdown .total-row {
+            border-bottom: none;
+            padding-top: 10px;
+            margin-top: 5px;
+            border-top: 2px solid rgba(0,255,136,0.3);
+        }
+        .breakdown .total-row .label { color: #00ff88; font-weight: bold; }
+        .breakdown .total-row .value { color: #00ff88; font-weight: bold; font-size: 18px; }
+        
+        .step {
+            background: rgba(0,212,255,0.1);
+            border-left: 3px solid #00d4ff;
+            padding: 5px 8px;
+            margin: 3px 0;
+            font-size: 10px;
+            color: #00d4ff;
+            border-radius: 0 4px 4px 0;
+            text-align: left;
+        }
+        
+        .note {
+            background: rgba(255,200,0,0.15);
+            border: 1px solid #ffc800;
+            border-radius: 8px;
+            padding: 10px;
+            margin-top: 12px;
+            font-size: 10px;
+            color: #ffc800;
+        }
+        .copy-box {
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            padding: 10px;
+            margin-top: 12px;
+            font-family: monospace;
+            font-size: 10px;
+            white-space: pre-wrap;
+            color: #00ff88;
+            text-align: left;
+        }
+        .copy-btn {
+            width: 100%;
+            padding: 12px;
+            background: #00ff88;
+            border: none;
+            border-radius: 8px;
+            color: #000;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+        
+        .quick-buttons {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 12px;
+        }
+        .quick-btn {
+            flex: 1;
+            padding: 8px 4px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 6px;
+            color: #fff;
+            cursor: pointer;
+            font-size: 11px;
+        }
+        
+        .type-tabs {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 12px;
+        }
+        .type-tab {
+            flex: 1;
+            padding: 10px 6px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 8px;
+            color: #888;
+            cursor: pointer;
+            font-size: 10px;
+            text-align: center;
+        }
+        .type-tab.active {
+            background: rgba(0,212,255,0.3);
+            border-color: #00d4ff;
+            color: #fff;
+        }
+        .type-tab span {
+            display: block;
+            font-size: 18px;
+            margin-bottom: 2px;
+        }
+        
+        .install-btn {
+            background: linear-gradient(135deg, #ff6b00, #cc5500);
+            margin-top: 10px;
+        }
+        
+        .add-to-home {
+            text-align: center;
+            padding: 15px;
+            background: rgba(0,212,255,0.1);
+            border-radius: 10px;
+            margin-top: 15px;
+            font-size: 11px;
+            color: #00d4ff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚗 Авто из Кореи</h1>
+        <p class="subtitle">Калькулятор по формуле tks.ru</p>
+        
+        <div class="card">
+            <h3>Цена в Корее</h3>
+            <div class="input-group">
+                <input type="text" id="krwPrice" placeholder="25000000" oninput="formatKRW(this)">
+            </div>
+            <div class="quick-buttons">
+                <button class="quick-btn" onclick="setPrice(10000000)">10 млн</button>
+                <button class="quick-btn" onclick="setPrice(15000000)">15 млн</button>
+                <button class="quick-btn" onclick="setPrice(20000000)">20 млн</button>
+                <button class="quick-btn" onclick="setPrice(25000000)">25 млн</button>
+            </div>
+            
+            <div class="row">
+                <div class="input-group">
+                    <label>1 USD = KRW</label>
+                    <input type="number" id="krwRate" value="1350">
+                </div>
+                <div class="input-group">
+                    <label>1 USDT = RUB</label>
+                    <input type="number" id="rubRate" value="92" step="0.1">
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h3>Параметры</h3>
+            
+            <div class="type-tabs">
+                <div class="type-tab active" onclick="setType('petrol')" id="type-petrol">
+                    <span>⛽</span>Бензин/Дизель
+                </div>
+                <div class="type-tab" onclick="setType('hybrid')" id="type-hybrid">
+                    <span>🔋</span>Гибрид
+                </div>
+                <div class="type-tab" onclick="setType('electric')" id="type-electric">
+                    <span>⚡</span>Электро
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="input-group">
+                    <label>Объём (см³)</label>
+                    <input type="number" id="engineCC" value="2000">
+                </div>
+                <div class="input-group">
+                    <label>Мощность (л.с.)</label>
+                    <input type="number" id="hp" value="150">
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="input-group">
+                    <label>Год выпуска</label>
+                    <input type="number" id="year" value="2024" min="1990" max="2026">
+                </div>
+                <div class="input-group">
+                    <label>Пробег (км)</label>
+                    <input type="number" id="mileage" value="0">
+                </div>
+            </div>
+            
+            <div class="input-group">
+                <label>Возраст</label>
+                <select id="carAge">
+                    <option value="0">До 3 лет</option>
+                    <option value="1">3-5 лет</option>
+                    <option value="2">5-7 лет</option>
+                    <option value="3">Более 7 лет</option>
+                </select>
+            </div>
+        </div>
+        
+        <button class="btn" onclick="calculate()">📊 Рассчитать</button>
+        
+        <div class="result" id="result">
+            <div class="tabs">
+                <div class="tab active" onclick="showAge(0)">До 3 лет</div>
+                <div class="tab" onclick="showAge(1)">3-5 лет</div>
+                <div class="tab" onclick="showAge(2)">5-7 лет</div>
+                <div class="tab" onclick="showAge(3)">7+ лет</div>
+            </div>
+            
+            <h3>ИТОГО:</h3>
+            <div class="price" id="total">0 ₽</div>
+            
+            <div class="step" id="step1">Шаг 1...</div>
+            <div class="step" id="step2">Шаг 2...</div>
+            <div class="step" id="step3">Шаг 3...</div>
+            
+            <div class="breakdown" id="breakdown"></div>
+            
+            <div class="note">⚠️ Ориентировочно. Точно: <a href="https://www.tks.ru/auto/calc/" target="_blank" style="color:#ff6b00;">tks.ru</a></div>
+            
+            <div class="copy-box" id="copyText"></div>
+            <button class="copy-btn" onclick="copyResult()">📋 Скопировать</button>
+        </div>
+        
+        <div class="add-to-home">
+            📱 iOS: Safari → Поделить → "На экран Домой"<br>
+            Android: Меню → "Установить приложение"
+        </div>
+    </div>
+    
+    <script>
+        let currentData = {};
+        let vehicleType = 'petrol';
+        
+        function setType(type) {
+            vehicleType = type;
+            document.querySelectorAll('.type-tab').forEach(t => t.classList.remove('active'));
+            document.getElementById('type-' + type).classList.add('active');
+        }
+        
+        function formatKRW(input) {
+            input.value = input.value.replace(/[^\d]/g, '');
+        }
+        
+        function setPrice(val) {
+            document.getElementById('krwPrice').value = val;
+        }
+        
+        function fmt(num) {
+            return Math.round(num).toLocaleString('ru-RU') + ' ₽';
+        }
+        
+        function fmtUSD(num) {
+            return '$' + num.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        }
+        
+        // Customs duty rates per cm³ based on age and type
+        function getDutyRate(age, type) {
+            if (type === 'electric') {
+                // Electric cars: 0% duty for first 3 years, then varies
+                return [0, 0.05, 0.07, 0.15][age];
+            }
+            return [0.05, 0.07, 0.15, 0.15][age];
+        }
+        
+        function getHpFee(age) {
+            return [0.5, 0.8, 1.5, 1.5][age];
+        }
+        
+        function showAge(age) {
+            document.querySelectorAll('.tab').forEach((t, i) => {
+                t.classList.toggle('active', i === age);
+            });
+            calculateForAge(age);
+        }
+        
+        function calculate() {
+            const krw = parseInt(document.getElementById('krwPrice').value) || 0;
+            const krwRate = parseFloat(document.getElementById('krwRate').value) || 1350;
+            const rubRate = parseFloat(document.getElementById('rubRate').value) || 92;
+            const cc = parseInt(document.getElementById('engineCC').value) || 2000;
+            const hp = parseInt(document.getElementById('hp').value) || 150;
+            const year = parseInt(document.getElementById('year').value) || 2024;
+            const mileage = parseInt(document.getElementById('mileage').value) || 0;
+            const age = parseInt(document.getElementById('carAge').value);
+            
+            if (krw === 0) {
+                alert('Введите цену в KRW');
+                return;
+            }
+            
+            const priceUSD = krw / krwRate;
+            const priceRub = priceUSD * rubRate;
+            
+            currentData = { krw, krwRate, rubRate, cc, hp, year, mileage, priceUSD, priceRub, vehicleType };
+            document.getElementById('result').classList.add('show');
+            calculateForAge(age);
+        }
+        
+        function calculateForAge(age) {
+            const { krw, krwRate, rubRate, cc, hp, year, mileage, priceUSD, priceRub, vehicleType } = currentData;
+            
+            const fixedFee = 1500000;
+            const priceWithFee = priceRub + fixedFee;
+            
+            const dutyEUR = cc * getDutyRate(age, vehicleType);
+            const dutyRub = dutyEUR * rubRate * 0.92;
+            
+            const hpFeeEUR = hp * getHpFee(age);
+            const hpFeeRub = hpFeeEUR * rubRate * 0.92;
+            
+            // VAT 20%
+            const vat = (priceWithFee + dutyRub + hpFeeRub) * 0.20;
+            
+            // Additional fees
+            const delivery = 110000;
+            const clearance = 45000;
+            const processing = 60000;
+            const registration = 85000;
+            const broker = 85000;
+            const cert = 35000;
+            const agent = 170000;
+            
+            const total = priceWithFee + dutyRub + hpFeeRub + vat + delivery + clearance + processing + registration + broker + cert + agent;
+            
+            document.getElementById('total').textContent = fmt(total);
+            document.getElementById('step1').textContent = `${krw.toLocaleString('ru-RU')} KRW ÷ ${krwRate} = ${fmtUSD(priceUSD)}`;
+            document.getElementById('step2').textContent = `${fmtUSD(priceUSD)} × ${rubRate} = ${fmt(priceRub)}`;
+            document.getElementById('step3').textContent = `${fmt(priceRub)} + 1,500,000 = ${fmt(priceWithFee)}`;
+            
+            const ageNames = ['ДО 3 ЛЕТ', '3-5 ЛЕТ', '5-7 ЛЕТ', 'БОЛЕЕ 7 ЛЕТ'];
+            const typeNames = { petrol: 'Бензин/Дизель', hybrid: 'Гибрид', electric: 'Электро' };
+            
+            let html = `
+                <div><span class="label">Тип</span><span class="value">${typeNames[vehicleType]}</span></div>
+                <div><span class="label">Цена</span><span class="value">${krw.toLocaleString('ru-RU')} KRW</span></div>
+                <div><span class="label">USD</span><span class="value">${fmtUSD(priceUSD)}</span></div>
+                <div><span class="label">Курс USDT</span><span class="value">× ${rubRate}</span></div>
+                <div><span class="label">В рублях</span><span class="value">${fmt(priceRub)}</span></div>
+                <div><span class="label" style="color:#ffc800;">+ Фикс</span><span class="value" style="color:#ffc800;">+ ${fmt(fixedFee)}</span></div>
+                <div style="margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.1);">
+                    <span class="label" style="color:#00d4ff;">${ageNames[age]}</span>
+                </div>
+                <div><span class="label">Пошлина (${cc}см³)</span><span class="value">+ ${fmt(dutyRub)}</span></div>
+                <div><span class="label">За л.с. (${hp})</span><span class="value">+ ${fmt(hpFeeRub)}</span></div>
+                <div><span class="label">НДС 20%</span><span class="value">+ ${fmt(vat)}</span></div>
+                <div><span class="label">Доставка</span><span class="value">+ ${fmt(delivery)}</span></div>
+                <div><span class="label">Оформление</span><span class="value">+ ${fmt(clearance)}</span></div>
+                <div><span class="label">Регистрация</span><span class="value">+ ${fmt(registration)}</span></div>
+                <div class="total-row">
+                    <span class="label">ИТОГО</span>
+                    <span class="value">${fmt(total)}</span>
+                </div>
+            `;
+            
+            document.getElementById('breakdown').innerHTML = html;
+            
+            const ageLabels = ['до 3 лет', '3-5 лет', '5-7 лет', 'более 7 лет'];
+            const copyText = `🚗 РАСЧЁТ АВТО ИЗ КОРЕИ
+
+📍 ${krw.toLocaleString('ru-RU')} KRW → ${fmtUSD(priceUSD)} → ${fmt(priceRub)}
+📦 + 1,500,000 = ${fmt(priceWithFee)}
+
+🚗 ${typeNames[vehicleType]} | ${cc}см³ | ${hp}л.с.
+📅 ${year} | ${mileage.toLocaleString('ru-RU')} км | ${ageLabels[age]}
+
+💰 ИТОГО: ${fmt(total)}
+
+⚠️ tks.ru/auto/calc`;
+
+            document.getElementById('copyText').textContent = copyText;
+        }
+        
+        function copyResult() {
+            navigator.clipboard.writeText(document.getElementById('copyText').textContent);
+            alert('Скопировано!');
+        }
+        
+        document.getElementById('krwPrice').addEventListener('keypress', e => {
+            if (e.key === 'Enter') calculate();
+        });
+    </script>
+</body>
+</html>
