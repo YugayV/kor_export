@@ -459,15 +459,15 @@ DASHBOARD_HTML = '''
             <div class="rates-grid">
                 <div class="rate-card">
                     <div class="rate-label">EUR/USD</div>
-                    <div class="rate-value" id="eur-usd">{{ rates.EUR_USD:.2f }}</div>
+                    <div class="rate-value" id="eur-usd">{{ "%.2f"|format(rates.EUR_USD) }}</div>
                 </div>
                 <div class="rate-card">
                     <div class="rate-label">EUR/RUB</div>
-                    <div class="rate-value" id="eur-rub">{{ rates.EUR_RUB:.2f }}</div>
+                    <div class="rate-value" id="eur-rub">{{ "%.2f"|format(rates.EUR_RUB) }}</div>
                 </div>
                 <div class="rate-card">
                     <div class="rate-label">RUB/USD</div>
-                    <div class="rate-value" id="rub-usd">{{ rates.RUB_USD:.2f }}</div>
+                    <div class="rate-value" id="rub-usd">{{ "%.2f"|format(rates.RUB_USD) }}</div>
                 </div>
             </div>
             <p class="updated">Обновлено: {{ last_update }}</p>
