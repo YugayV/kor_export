@@ -762,6 +762,14 @@ if __name__ == "__main__":
     flask_thread = threading.Thread(target=run_flask, daemon=True)
     flask_thread.start()
     
+    # Автопроверка и загрузка курсов при запуске
+    print("🔄 Загружаем курс евро...")
+    rates = get_rates()
+    print("✅ Курс евро:")
+    print(f"   EUR/RUB: {rates['EUR_RUB']:.2f}")
+    print(f"   Обновлено: {_last_update.strftime('%Y-%m-%d %H:%M:%S') if _last_update else 'Нет данных'}")
+    print()
+    
     # Главный поток просто ждет
     print("✅ Все сервисы запущены!")
     while True:
