@@ -737,20 +737,32 @@ def run_bot():
             print("🚀 Бот запущен...")
             bot.polling(none_stop=True)
         except Exception as e:
-            print(f"❌ Ошибка: {e}")
-            print("⏳ Перезапуск через 5 секунд...")
+            print(f"❌ Ошибка бота: {e}")
+            print("⏳ Перезапуск бота через 5 секунд...")
             time.sleep(5)
 
 def run_flask():
-    """Запускаем Flask дашборд"""
-    port = int(os.getenv("PORT", 5000))
-    app.run(host='0.0.0.0', port=port)
+    """Запускаем Flask дашборд с автоперезапуском при сбоях"""
+    while True:
+        try:
+            port = int(os.getenv("PORT", 5000))
+            print(f"🌐 Дашборд запущен на порту {port}...")
+            app.run(host='0.0.0.0', port=port, use_reloader=False)
+        except Exception as e:
+            print(f"❌ Ошибка дашборда: {e}")
+            print("⏳ Перезапуск дашборда через 5 секунд...")
+            time.sleep(5)
 
 if __name__ == "__main__":
     # Запускаем бота в отдельном потоке
     bot_thread = threading.Thread(target=run_bot, daemon=True)
     bot_thread.start()
     
-    # Запускаем Flask дашборд в главном потоке
-    print("🌐 Дашборд запущен...")
-    run_flask()
+    # Запускаем Flask дашборд в отдельном потоке
+    flask_thread = threading.Thread(target=run_flask, daemon=True)
+    flask_thread.start()
+    
+    # Главный поток просто ждет
+    print("✅ Все сервисы запущены!")
+    while True:
+        time.sleep(1)
