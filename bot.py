@@ -4,6 +4,7 @@ import json
 import time
 import threading
 import telebot
+from telebot.apihelper import ApiTelegramException
 import requests
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
@@ -735,11 +736,22 @@ def run_bot():
     while True:
         try:
             print("🚀 Бот запущен...")
-            bot.polling(none_stop=True)
+            bot.infinity_polling(timeout=30, long_polling_timeout=30)
+        except ApiTelegramException as e:
+            if getattr(e, "error_code", None) == 409:
+                print("⚠️ Conflict 409: другой процесс уже делает getUpdates. Остановите второй инстанс/деплой.")
+                time.sleep(15)
+            else:
+                print(f"❌ Ошибка Telegram API: {e}")
+                time.sleep(5)
         except Exception as e:
             print(f"❌ Ошибка бота: {e}")
-            print("⏳ Перезапуск бота через 5 секунд...")
             time.sleep(5)
+        finally:
+            try:
+                bot.stop_polling()
+            except Exception:
+                pass
 
 def run_flask():
     """Запускаем Flask дашборд с автоперезапуском при сбоях"""
