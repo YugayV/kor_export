@@ -16,7 +16,13 @@ import sys
 # CONFIGURATION - EDIT THIS!
 # ============================================================
 
-BOT_TOKEN = "8784793542:AAEDkX1igyp-MyWcqE4UYzBHHkymkDqrxqk"  # Your bot token
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+BOT_TOKEN = os.getenv("BOT_TOKEN")  # Your bot token
+if not BOT_TOKEN:
+    raise ValueError("BOT_TOKEN не найден в .env файле!")
 
 # ============================================================
 # INDICATORS
@@ -151,7 +157,7 @@ def format_signal_message(signal, row):
     message = f"""
 📊 <b>EURUSD DXY SIGNAL</b> 📊
 
-{birection}
+{direction}
 
 📅 <b>Date:</b> {date}
 💱 <b>EUR/USD:</b> {eurusd}
