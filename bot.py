@@ -15,6 +15,11 @@ load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN не найден в .env файле!")
+
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
+WEBHOOK_PATH = os.getenv("WEBHOOK_PATH", "/telegram-webhook")
+WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET")
+
 bot = telebot.TeleBot(BOT_TOKEN)
 
 ВОЗРАСТ = ["до 3 лет", "3-5 лет", "более 5 лет"]
@@ -687,6 +692,17 @@ DASHBOARD_HTML = '''
 </html>
 '''
 
+@app.route(WEBHOOK_PATH, methods=['POST'])
+def telegram_webhook():
+    if WEBHOOK_SECRET:
+        secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token")
+        if secret != WEBHOOK_SECRET:
+            return "Forbidden", 403
+
+    update = telebot.types.Update.de_json(request.get_data(as_text=True))
+    bot.process_new_updates([update])
+    return "OK"
+
 @app.route('/')
 def dashboard():
     rates = get_rates()
@@ -766,14 +782,6 @@ def run_flask():
             time.sleep(5)
 
 if __name__ == "__main__":
-    # Запускаем бота в отдельном потоке
-    bot_thread = threading.Thread(target=run_bot, daemon=True)
-    bot_thread.start()
-    
-    # Запускаем Flask дашборд в отдельном потоке
-    flask_thread = threading.Thread(target=run_flask, daemon=True)
-    flask_thread.start()
-    
     # Автопроверка и загрузка курсов при запуске
     print("🔄 Загружаем курс евро...")
     rates = get_rates()
@@ -781,8 +789,29 @@ if __name__ == "__main__":
     print(f"   EUR/RUB: {rates['EUR_RUB']:.2f}")
     print(f"   Обновлено: {_last_update.strftime('%Y-%m-%d %H:%M:%S') if _last_update else 'Нет данных'}")
     print()
-    
-    # Главный поток просто ждет
-    print("✅ Все сервисы запущены!")
-    while True:
+
+    if WEBHOOK_URL:
+        webhook_url = WEBHOOK_URL.rstrip("/") + WEBHOOK_PATH
+        try:
+            bot.remove_webhook()
+        except Exception:
+            pass
         time.sleep(1)
+        if WEBHOOK_SECRET:
+            bot.set_webhook(url=webhook_url, secret_token=WEBHOOK_SECRET)
+        else:
+            bot.set_webhook(url=webhook_url)
+
+        print(f"✅ Webhook включен: {webhook_url}")
+        run_flask()
+    else:
+        # Локальный режим без WEBHOOK_URL: запускаем polling
+        bot_thread = threading.Thread(target=run_bot, daemon=True)
+        bot_thread.start()
+
+        flask_thread = threading.Thread(target=run_flask, daemon=True)
+        flask_thread.start()
+
+        print("✅ Все сервисы запущены!")
+        while True:
+            time.sleep(1)
