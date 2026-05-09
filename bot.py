@@ -765,24 +765,31 @@ def run_flask():
             print("⏳ Перезапуск дашборда через 5 секунд...")
             time.sleep(5)
 
-if __name__ == "__main__":
-    # Запускаем бота в отдельном потоке
-    bot_thread = threading.Thread(target=run_bot, daemon=True)
-    bot_thread.start()
-    
-    # Запускаем Flask дашборд в отдельном потоке
-    flask_thread = threading.Thread(target=run_flask, daemon=True)
-    flask_thread.start()
-    
-    # Автопроверка и загрузка курсов при запуске
+def prefetch_euro_rate():
     print("🔄 Загружаем курс евро...")
     rates = get_rates()
     print("✅ Курс евро:")
     print(f"   EUR/RUB: {rates['EUR_RUB']:.2f}")
     print(f"   Обновлено: {_last_update.strftime('%Y-%m-%d %H:%M:%S') if _last_update else 'Нет данных'}")
     print()
-    
-    # Главный поток просто ждет
-    print("✅ Все сервисы запущены!")
-    while True:
-        time.sleep(1)
+
+if __name__ == "__main__":
+    app_role = (os.getenv("APP_ROLE") or "both").strip().lower()
+
+    if app_role == "worker":
+        prefetch_euro_rate()
+        run_bot()
+    elif app_role == "web":
+        run_flask()
+    else:
+        prefetch_euro_rate()
+
+        bot_thread = threading.Thread(target=run_bot, daemon=True)
+        bot_thread.start()
+
+        flask_thread = threading.Thread(target=run_flask, daemon=True)
+        flask_thread.start()
+
+        print("✅ Все сервисы запущены!")
+        while True:
+            time.sleep(1)
