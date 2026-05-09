@@ -21,6 +21,26 @@ WEBHOOK_PATH = os.getenv("WEBHOOK_PATH", "/telegram-webhook")
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET")
 
 bot = telebot.TeleBot(BOT_TOKEN)
+_webhook_configured = False
+
+def configure_webhook():
+    global _webhook_configured
+    if _webhook_configured or not WEBHOOK_URL:
+        return
+
+    webhook_url = WEBHOOK_URL.rstrip("/") + WEBHOOK_PATH
+    try:
+        bot.remove_webhook()
+    except Exception:
+        pass
+    time.sleep(1)
+    if WEBHOOK_SECRET:
+        bot.set_webhook(url=webhook_url, secret_token=WEBHOOK_SECRET)
+    else:
+        bot.set_webhook(url=webhook_url)
+
+    _webhook_configured = True
+    print(f"✅ Webhook включен: {webhook_url}")
 
 ВОЗРАСТ = ["до 3 лет", "3-5 лет", "более 5 лет"]
 ТИПЫ = ["Бензин/Дизель", "Гибрид", "Электро"]
@@ -791,18 +811,7 @@ if __name__ == "__main__":
     print()
 
     if WEBHOOK_URL:
-        webhook_url = WEBHOOK_URL.rstrip("/") + WEBHOOK_PATH
-        try:
-            bot.remove_webhook()
-        except Exception:
-            pass
-        time.sleep(1)
-        if WEBHOOK_SECRET:
-            bot.set_webhook(url=webhook_url, secret_token=WEBHOOK_SECRET)
-        else:
-            bot.set_webhook(url=webhook_url)
-
-        print(f"✅ Webhook включен: {webhook_url}")
+        configure_webhook()
         run_flask()
     else:
         # Локальный режим без WEBHOOK_URL: запускаем polling
