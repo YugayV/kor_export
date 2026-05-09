@@ -311,6 +311,21 @@ user_data = {}
     ("delivery_rub", "Доставка по России в ₽ (пример: 150000):"),
 ]
 
+def normalize_public_url(url):
+    if not url:
+        return None
+    url = str(url).strip()
+    if not url:
+        return None
+    if url.startswith("http://") or url.startswith("https://"):
+        return url
+    return "https://" + url
+
+
+def get_dashboard_url():
+    return normalize_public_url(os.getenv("DASHBOARD_URL"))
+
+
 def build_main_menu_markup():
     markup = types.InlineKeyboardMarkup(row_width=2)
     markup.add(
@@ -319,7 +334,7 @@ def build_main_menu_markup():
     )
     markup.add(types.InlineKeyboardButton("💶 Курс EUR/RUB", callback_data="rate_eur_rub"))
 
-    dashboard_url = os.getenv("DASHBOARD_URL")
+    dashboard_url = get_dashboard_url()
     if dashboard_url:
         markup.add(types.InlineKeyboardButton("🌐 Дашборд", url=dashboard_url))
 
@@ -400,54 +415,73 @@ def handle(m):
             value = int(text)
         else:
             value = float(text)
-        
+
+        if field == "age" and value not in range(len(ВОЗРАСТ)):
+            bot.reply_to(m, "⚠️ Возраст: введите 0, 1 или 2.\n\n" + prompt, parse_mode="HTML")
+            return
+        if field == "type" and value not in range(len(ТИПЫ)):
+            bot.reply_to(m, "⚠️ Тип: введите 0, 1 или 2.\n\n" + prompt, parse_mode="HTML")
+            return
+        if field in ["krw_usd", "usd_rub"] and value <= 0:
+            bot.reply_to(m, "⚠️ Курс должен быть больше 0.\n\n" + prompt, parse_mode="HTML")
+            return
+        if field in ["price_krw", "cc", "hp"] and value <= 0:
+            bot.reply_to(m, "⚠️ Значение должно быть больше 0.\n\n" + prompt, parse_mode="HTML")
+            return
+        if field == "delivery_rub" and value < 0:
+            bot.reply_to(m, "⚠️ Доставка не может быть отрицательной.\n\n" + prompt, parse_mode="HTML")
+            return
+
         user_data[cid][field] = value
         waiting[cid] = step + 1
-        
+
         if waiting[cid] >= len(ШАГИ):
-            rates = get_rates()
-            result = calculate(user_data[cid], rates)
-            data = user_data[cid]
-            
-            # Сохраняем расчет в историю
-            calc_entry = {
-                "timestamp": datetime.now().isoformat(),
-                "data": data,
-                "result": result
-            }
-            calculations_history.append(calc_entry)
-            # Сохраняем только последние 100 расчетов
-            if len(calculations_history) > 100:
-                calculations_history = calculations_history[-100:]
-            save_calculations(calculations_history)
-            
-            excise_str = f"  🚬 Акциз: {fmt(result['excise'])} ₽\n" if data["type"] == 2 else ""
-            vat_str = f"  💸 НДС 20%: {fmt(result['vat'])} ₽\n" if data["type"] == 2 else ""
-            
-            response = (
-                f"🚗 <b>Расчёт авто из Кореи</b>\n\n"
-                f"📍 Цена: {fmt(result['krw'])} KRW → ${result['usd']:,.2f} → {fmt(result['rub'])} ₽\n"
-                f"💶 ≈ {fmt(result['eur'])} €\n\n"
-                f"⛽ {ТИПЫ[data['type']]}\n"
-                f"📅 {ВОЗРАСТ[data['age']]} | 🚗 {data['cc']} см³ | 🐎 {data['hp']} л.с.\n\n"
-                f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"📦 <b>Таможня (calcus.ru):</b>\n"
-                f"  Пошлина ({fmt(result['duty_eur'])} €): {fmt(result['duty_rub'])} ₽\n"
-                f"  Оформление: {fmt(result['proc'])} ₽\n"
-                f"{excise_str}"
-                f"  ♻️ Утильсбор: {fmt(result['util'])} ₽\n"
-                f"{vat_str}"
-                f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"🚢 Паром (3 500 000 KRW): +{fmt(result['delivery_ship'])} ₽\n"
-                f"🚛 Доставка по России: +{fmt(result['delivery_rus'])} ₽\n"
-                f"🔗 Брокер: +100 000 ₽\n\n"
-                f"💰 <b>ИТОГО: {fmt(result['total'])} ₽</b>\n\n"
-                f"/reset — новый расчёт"
-            )
-            
-            bot.reply_to(m, response, parse_mode="HTML")
-            waiting[cid] = None
-            user_data[cid] = {}
+            try:
+                rates = get_rates()
+                result = calculate(user_data[cid], rates)
+                data = user_data[cid]
+
+                calc_entry = {
+                    "timestamp": datetime.now().isoformat(),
+                    "data": data,
+                    "result": result
+                }
+                calculations_history.append(calc_entry)
+                if len(calculations_history) > 100:
+                    del calculations_history[:-100]
+                save_calculations(calculations_history)
+
+                excise_str = f"  🚬 Акциз: {fmt(result['excise'])} ₽\n" if data["type"] == 2 else ""
+                vat_str = f"  💸 НДС 20%: {fmt(result['vat'])} ₽\n" if data["type"] == 2 else ""
+
+                response = (
+                    f"🚗 <b>Расчёт авто из Кореи</b>\n\n"
+                    f"📍 Цена: {fmt(result['krw'])} KRW → ${result['usd']:,.2f} → {fmt(result['rub'])} ₽\n"
+                    f"💶 ≈ {fmt(result['eur'])} €\n\n"
+                    f"⛽ {ТИПЫ[data['type']]}\n"
+                    f"📅 {ВОЗРАСТ[data['age']]} | 🚗 {data['cc']} см³ | 🐎 {data['hp']} л.с.\n\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"📦 <b>Таможня (calcus.ru):</b>\n"
+                    f"  Пошлина ({fmt(result['duty_eur'])} €): {fmt(result['duty_rub'])} ₽\n"
+                    f"  Оформление: {fmt(result['proc'])} ₽\n"
+                    f"{excise_str}"
+                    f"  ♻️ Утильсбор: {fmt(result['util'])} ₽\n"
+                    f"{vat_str}"
+                    f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"🚢 Паром (3 500 000 KRW): +{fmt(result['delivery_ship'])} ₽\n"
+                    f"🚛 Доставка по России: +{fmt(result['delivery_rus'])} ₽\n"
+                    f"🔗 Брокер: +100 000 ₽\n\n"
+                    f"💰 <b>ИТОГО: {fmt(result['total'])} ₽</b>\n\n"
+                    f"/reset — новый расчёт"
+                )
+
+                bot.reply_to(m, response, parse_mode="HTML")
+                waiting[cid] = None
+                user_data[cid] = {}
+            except Exception:
+                bot.reply_to(m, "⚠️ Ошибка расчёта. Проверьте введённые данные.\n\n/reset — новый расчёт", parse_mode="HTML")
+                waiting[cid] = None
+                user_data[cid] = {}
         else:
             next_field, next_prompt = ШАГИ[waiting[cid]]
             bot.reply_to(m, next_prompt, parse_mode="HTML")
