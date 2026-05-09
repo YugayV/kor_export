@@ -368,7 +368,7 @@ def handle(m):
             calculations_history.append(calc_entry)
             # Сохраняем только последние 100 расчетов
             if len(calculations_history) > 100:
-                calculations_history = calculations_history[-100:]
+                calculations_history[:] = calculations_history[-100:]
             save_calculations(calculations_history)
             
             excise_str = f"  🚬 Акциз: {fmt(result['excise'])} ₽\n" if data["type"] == 2 else ""
