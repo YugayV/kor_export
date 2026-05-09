@@ -4,6 +4,7 @@ import json
 import time
 import threading
 import telebot
+from telebot import types
 from telebot.apihelper import ApiTelegramException
 import requests
 from datetime import datetime, timedelta
@@ -310,24 +311,73 @@ user_data = {}
     ("delivery_rub", "Доставка по России в ₽ (пример: 150000):"),
 ]
 
+def build_main_menu_markup():
+    markup = types.InlineKeyboardMarkup(row_width=2)
+    markup.add(
+        types.InlineKeyboardButton("🧮 Сделать расчёт", callback_data="calc_start"),
+        types.InlineKeyboardButton("🔄 Restart", callback_data="calc_restart"),
+    )
+    markup.add(types.InlineKeyboardButton("💶 Курс EUR/RUB", callback_data="rate_eur_rub"))
+
+    dashboard_url = os.getenv("DASHBOARD_URL")
+    if dashboard_url:
+        markup.add(types.InlineKeyboardButton("🌐 Дашборд", url=dashboard_url))
+
+    return markup
+
+
+def begin_calculation(chat_id):
+    user_data[chat_id] = {}
+    waiting[chat_id] = 0
+    bot.send_message(chat_id, ШАГИ[0][1], parse_mode="HTML")
+
+
 @bot.message_handler(commands=["start"])
 def start(m):
+    waiting[m.chat.id] = None
     user_data[m.chat.id] = {}
-    waiting[m.chat.id] = 0
+
     rates = get_rates()
-    bot.reply_to(m, 
+    bot.reply_to(
+        m,
         f"🚗 <b>Калькулятор авто из Кореи</b>\n\n"
-        f"📊 Курсы автоматически (обновляются каждый час):\n"
-        f"   EUR/USD: {rates['EUR_USD']:.2f}\n"
-        f"   EUR/RUB: {rates['EUR_RUB']:.2f}\n\n"
-        f"Введите данные по очереди:\n\n" + ШАГИ[0][1],
-        parse_mode="HTML")
+        f"💶 EUR/RUB: {rates['EUR_RUB']:.2f}\n"
+        f"Обновлено: {_last_update.strftime('%Y-%m-%d %H:%M:%S') if _last_update else 'Нет данных'}\n\n"
+        f"Выберите действие кнопками ниже:",
+        parse_mode="HTML",
+        reply_markup=build_main_menu_markup(),
+    )
+
 
 @bot.message_handler(commands=["reset"])
 def reset(m):
-    user_data[m.chat.id] = {}
-    waiting[m.chat.id] = 0
-    start(m)
+    begin_calculation(m.chat.id)
+
+
+@bot.callback_query_handler(func=lambda call: True)
+def on_callback(call):
+    try:
+        if call.data == "calc_start":
+            bot.answer_callback_query(call.id)
+            begin_calculation(call.message.chat.id)
+        elif call.data == "calc_restart":
+            bot.answer_callback_query(call.id, text="Новый расчёт")
+            begin_calculation(call.message.chat.id)
+        elif call.data == "rate_eur_rub":
+            rates = get_rates()
+            bot.answer_callback_query(call.id)
+            bot.send_message(
+                call.message.chat.id,
+                f"💶 EUR/RUB: {rates['EUR_RUB']:.2f}\n"
+                f"Обновлено: {_last_update.strftime('%Y-%m-%d %H:%M:%S') if _last_update else 'Нет данных'}",
+            )
+        else:
+            bot.answer_callback_query(call.id)
+    except Exception:
+        try:
+            bot.answer_callback_query(call.id)
+        except Exception:
+            pass
 
 @bot.message_handler(func=lambda m: True)
 def handle(m):
