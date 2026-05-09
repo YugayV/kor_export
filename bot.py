@@ -13,10 +13,11 @@ from flask import Flask, render_template_string, jsonify, request
 
 # Загружаем переменные окружения из .env
 load_dotenv()
+APP_ROLE = (os.getenv("APP_ROLE") or "both").strip().lower()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-if not BOT_TOKEN:
-    raise ValueError("BOT_TOKEN не найден в .env файле!")
-bot = telebot.TeleBot(BOT_TOKEN)
+if not BOT_TOKEN and APP_ROLE != "web":
+    raise ValueError("BOT_TOKEN не найден в переменных окружения!")
+bot = telebot.TeleBot(BOT_TOKEN or "0:0")
 
 ВОЗРАСТ = ["до 3 лет", "3-5 лет", "более 5 лет"]
 ТИПЫ = ["Бензин/Дизель", "Гибрид", "Электро"]
