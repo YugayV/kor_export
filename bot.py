@@ -196,7 +196,11 @@ def get_customs_duty(cc, price_eur, age):
     if age == 0:
         return price_eur * 0.48
     elif age == 1:
-        if cc <= 2000:
+        if cc <= 1500:
+            return cc * 1.7
+        elif cc <= 1599:
+            return cc * 2.5
+        elif cc <= 2000:
             return cc * 2.7
         else:
             return cc * 3.0
