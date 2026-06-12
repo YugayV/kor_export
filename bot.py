@@ -211,16 +211,33 @@ def get_age_category(year=None, age=None):
 
 def get_customs_duty(cc, price_eur, age):
     if age == 0:
-        return price_eur * 0.48
-    elif age == 1:
-        if cc <= 1500:
-            return cc * 1.7
-        elif cc <= 1599:
-            return cc * 2.5
-        elif cc <= 2000:
-            return cc * 2.7
+        # Для авто до 3 лет пошлина считается как максимум
+        # между процентом от стоимости и минимальной ставкой за см3.
+        if price_eur <= 8500:
+            return max(price_eur * 0.54, cc * 2.5)
+        elif price_eur <= 16700:
+            return max(price_eur * 0.48, cc * 3.5)
+        elif price_eur <= 42300:
+            return max(price_eur * 0.48, cc * 5.5)
+        elif price_eur <= 84500:
+            return max(price_eur * 0.48, cc * 7.5)
+        elif price_eur <= 169000:
+            return max(price_eur * 0.48, cc * 15.0)
         else:
+            return max(price_eur * 0.48, cc * 20.0)
+    elif age == 1:
+        if cc <= 1000:
+            return cc * 1.5
+        elif cc <= 1500:
+            return cc * 1.7
+        elif cc <= 1800:
+            return cc * 2.5
+        elif cc <= 2300:
+            return cc * 2.7
+        elif cc <= 3000:
             return cc * 3.0
+        else:
+            return cc * 3.6
     else:
         if cc <= 1000: return cc * 3.0
         elif cc <= 1500: return cc * 3.2
@@ -288,12 +305,8 @@ def calculate(data, rates):
     base_rub = price_rub
     
     eur_rub = rates["EUR_RUB"]
-    if age == 0:
-        duty_rub = price_rub * 0.48
-        duty_eur = duty_rub / eur_rub if eur_rub else 0
-    else:
-        duty_eur = get_customs_duty(cc, price_eur, age)
-        duty_rub = duty_eur * eur_rub
+    duty_eur = get_customs_duty(cc, price_eur, age)
+    duty_rub = duty_eur * eur_rub
     
     proc_fee = get_processing_fee(price_rub)
     excise = get_excise(hp, vtype)
