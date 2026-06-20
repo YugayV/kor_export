@@ -257,7 +257,7 @@
 <body>
     <div class="container">
         <h1>🚗 Авто из Кореи</h1>
-        <p class="subtitle">Калькулятор po logike calcus.ru s konvertaciey iz KRW</p>
+        <p class="subtitle">Калькулятор по формуле tks.ru</p>
         
         <div class="card">
             <h3>Цена в Корее</h3>
@@ -279,10 +279,6 @@
                 <div class="input-group">
                     <label>1 USDT = RUB</label>
                     <input type="number" id="rubRate" value="92" step="0.1">
-                </div>
-                <div class="input-group">
-                    <label>1 USD = EUR</label>
-                    <input type="number" id="eurRate" value="0.92" step="0.01">
                 </div>
             </div>
         </div>
@@ -319,8 +315,8 @@
                     <input type="number" id="year" value="2024" min="1990" max="2026">
                 </div>
                 <div class="input-group">
-                    <label>Доставка по России (₽)</label>
-                    <input type="number" id="deliveryRub" value="150000">
+                    <label>Пробег (км)</label>
+                    <input type="number" id="mileage" value="0">
                 </div>
             </div>
             
@@ -354,7 +350,7 @@
             
             <div class="breakdown" id="breakdown"></div>
             
-            <div class="note">⚠️ Logika svodki priblizhena k calcus.ru, no raschet ostavlyaet vvod ceny v KRW i kursov kak v etom kalkulyatore.</div>
+            <div class="note">⚠️ Ориентировочно. Точно: <a href="https://www.tks.ru/auto/calc/" target="_blank" style="color:#ff6b00;">tks.ru</a></div>
             
             <div class="copy-box" id="copyText"></div>
             <button class="copy-btn" onclick="copyResult()">📋 Скопировать</button>
@@ -367,90 +363,6 @@
     </div>
     
     <script>
-        const PAROM_KRW = 3500000;
-        const UTIL_ELECTRO_0_3 = [
-            [[0, 80], 3400],
-            [[81, 100], 991200],
-            [[101, 130], 1317600],
-            [[131, 160], 1560000],
-            [[161, 190], 1848000],
-            [[191, 220], 2193600],
-            [[221, 250], 2599200],
-            [[251, 280], 3079200],
-            [[281, 9999], 3648000]
-        ];
-        const UTIL_ELECTRO_3_5 = [
-            [[0, 80], 5200],
-            [[81, 100], 1641600],
-            [[101, 130], 1912800],
-            [[131, 160], 2227200],
-            [[161, 190], 2594400],
-            [[191, 220], 3024000],
-            [[221, 250], 3523200],
-            [[251, 280], 4104000],
-            [[281, 9999], 4780800]
-        ];
-        const UTIL_DVS_1_2L_0_3 = [
-            [[0, 160], 3400],
-            [[161, 190], 900000],
-            [[191, 220], 952800],
-            [[221, 250], 1010400],
-            [[251, 280], 1142400],
-            [[281, 310], 1291200],
-            [[311, 340], 1459200],
-            [[341, 370], 1663200],
-            [[371, 400], 1896000],
-            [[401, 430], 2160000],
-            [[431, 460], 2464800],
-            [[461, 500], 2808000],
-            [[501, 9999], 3201600]
-        ];
-        const UTIL_DVS_1_2L_3_5 = [
-            [[0, 160], 5200],
-            [[161, 190], 1492800],
-            [[191, 220], 1584000],
-            [[221, 250], 1677600],
-            [[251, 280], 1838400],
-            [[281, 310], 2011200],
-            [[311, 340], 2203200],
-            [[341, 370], 2412000],
-            [[371, 400], 2640000],
-            [[401, 430], 2892000],
-            [[431, 460], 3168000],
-            [[461, 500], 3468000],
-            [[501, 9999], 3796800]
-        ];
-        const UTIL_DVS_2_3L_0_3 = [
-            [[0, 160], 3400],
-            [[161, 190], 2306800],
-            [[191, 220], 2364000],
-            [[221, 250], 2402400],
-            [[251, 280], 2520000],
-            [[281, 310], 2620800],
-            [[311, 340], 2726400],
-            [[341, 370], 2834400],
-            [[371, 400], 2949600],
-            [[401, 430], 3067200],
-            [[431, 460], 3189600],
-            [[461, 500], 3316800],
-            [[501, 9999], 3448800]
-        ];
-        const UTIL_DVS_2_3L_3_5 = [
-            [[0, 160], 5200],
-            [[161, 190], 3456000],
-            [[191, 220], 3501600],
-            [[221, 250], 3552000],
-            [[251, 280], 3660000],
-            [[281, 310], 3770400],
-            [[311, 340], 3873600],
-            [[341, 370], 4010400],
-            [[371, 400], 4123200],
-            [[401, 430], 4248000],
-            [[431, 460], 4384800],
-            [[461, 500], 4540800],
-            [[501, 9999], 4704000]
-        ];
-
         let currentData = {};
         let vehicleType = 'petrol';
         
@@ -475,80 +387,18 @@
         function fmtUSD(num) {
             return '$' + num.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
         }
-
-        function fmtEUR(num) {
-            return num.toLocaleString('ru-RU', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' €';
+        
+        // Customs duty rates per cm³ based on age and type
+        function getDutyRate(age, type) {
+            if (type === 'electric') {
+                // Electric cars: 0% duty for first 3 years, then varies
+                return [0, 0.05, 0.07, 0.15][age];
+            }
+            return [0.05, 0.07, 0.15, 0.15][age];
         }
-
-        function getDutyEur(cc, priceEur, age) {
-            if (vehicleType === 'electric') {
-                return priceEur * 0.15;
-            }
-
-            if (age === 0) {
-                if (priceEur <= 8500) return Math.max(priceEur * 0.54, cc * 2.5);
-                if (priceEur <= 16700) return Math.max(priceEur * 0.48, cc * 3.5);
-                if (priceEur <= 42300) return Math.max(priceEur * 0.48, cc * 5.5);
-                if (priceEur <= 84500) return Math.max(priceEur * 0.48, cc * 7.5);
-                if (priceEur <= 169000) return Math.max(priceEur * 0.48, cc * 15.0);
-                return Math.max(priceEur * 0.48, cc * 20.0);
-            }
-
-            if (age === 1) {
-                if (cc <= 1000) return cc * 1.5;
-                if (cc <= 1500) return cc * 1.7;
-                if (cc <= 1800) return cc * 2.5;
-                if (cc <= 2300) return cc * 2.7;
-                if (cc <= 3000) return cc * 3.0;
-                return cc * 3.6;
-            }
-
-            if (cc <= 1000) return cc * 3.0;
-            if (cc <= 1500) return cc * 3.2;
-            if (cc <= 1800) return cc * 3.5;
-            if (cc <= 2300) return cc * 4.8;
-            if (cc <= 3000) return cc * 5.0;
-            return cc * 5.7;
-        }
-
-        function getProcessingFee(priceRub) {
-            if (priceRub <= 200000) return 1231;
-            if (priceRub <= 450000) return 2462;
-            if (priceRub <= 1200000) return 4924;
-            if (priceRub <= 2700000) return 13541;
-            if (priceRub <= 4200000) return 18465;
-            if (priceRub <= 5500000) return 21344;
-            if (priceRub <= 10000000) return 49240;
-            return 73860;
-        }
-
-        function getExcise(hp) {
-            if (vehicleType !== 'electric') return 0;
-            if (hp <= 90) return 0;
-            if (hp <= 150) return 64 * hp;
-            if (hp <= 200) return 613 * hp;
-            if (hp <= 300) return 1004 * hp;
-            if (hp <= 400) return 1711 * hp;
-            if (hp <= 500) return 1771 * hp;
-            return 1829 * hp;
-        }
-
-        function getUtilFee(hp, age, cc) {
-            const utilAge = age === 0 ? 0 : 1;
-            let table;
-
-            if (vehicleType === 'hybrid' || vehicleType === 'electric') {
-                table = utilAge === 0 ? UTIL_ELECTRO_0_3 : UTIL_ELECTRO_3_5;
-            } else if (cc <= 2000) {
-                table = utilAge === 0 ? UTIL_DVS_1_2L_0_3 : UTIL_DVS_1_2L_3_5;
-            } else {
-                table = utilAge === 0 ? UTIL_DVS_2_3L_0_3 : UTIL_DVS_2_3L_3_5;
-            }
-
-            for (const [[lo, hi], fee] of table) {
-                if (hp >= lo && hp <= hi) return fee;
-            }
-            return 5000000;
+        
+        function getHpFee(age) {
+            return [0.5, 0.8, 1.5, 1.5][age];
         }
         
         function showAge(age) {
@@ -562,72 +412,75 @@
             const krw = parseInt(document.getElementById('krwPrice').value) || 0;
             const krwRate = parseFloat(document.getElementById('krwRate').value) || 1350;
             const rubRate = parseFloat(document.getElementById('rubRate').value) || 92;
-            const eurRate = parseFloat(document.getElementById('eurRate').value) || 0.92;
             const cc = parseInt(document.getElementById('engineCC').value) || 2000;
             const hp = parseInt(document.getElementById('hp').value) || 150;
             const year = parseInt(document.getElementById('year').value) || 2024;
-            const deliveryRub = parseInt(document.getElementById('deliveryRub').value) || 0;
+            const mileage = parseInt(document.getElementById('mileage').value) || 0;
             const age = parseInt(document.getElementById('carAge').value);
             
             if (krw === 0) {
                 alert('Введите цену в KRW');
                 return;
             }
-            if (krwRate <= 0 || rubRate <= 0 || eurRate <= 0) {
-                alert('Проверьте валютные курсы');
-                return;
-            }
             
             const priceUSD = krw / krwRate;
             const priceRub = priceUSD * rubRate;
-            const priceEur = priceUSD * eurRate;
             
-            currentData = { krw, krwRate, rubRate, eurRate, cc, hp, year, deliveryRub, priceUSD, priceRub, priceEur, vehicleType };
+            currentData = { krw, krwRate, rubRate, cc, hp, year, mileage, priceUSD, priceRub, vehicleType };
             document.getElementById('result').classList.add('show');
             calculateForAge(age);
         }
         
         function calculateForAge(age) {
-            const { krw, krwRate, rubRate, cc, hp, year, deliveryRub, priceUSD, priceRub, priceEur, vehicleType } = currentData;
-            const eurRub = rubRate / currentData.eurRate;
-            const dutyEur = getDutyEur(cc, priceEur, age);
-            const dutyRub = dutyEur * eurRub;
-            const processing = getProcessingFee(priceRub);
-            const excise = getExcise(hp);
-            const util = getUtilFee(hp, age, cc);
-            const vat = vehicleType === 'electric' ? (priceRub + dutyRub + excise) * 0.20 : 0;
-            const ferryRub = (PAROM_KRW / krwRate) * rubRate;
-            const broker = 100000;
-            const total = priceRub + dutyRub + processing + excise + util + vat + ferryRub + deliveryRub + broker;
-
+            const { krw, krwRate, rubRate, cc, hp, year, mileage, priceUSD, priceRub, vehicleType } = currentData;
+            
+            const fixedFee = 1500000;
+            const priceWithFee = priceRub + fixedFee;
+            
+            const dutyEUR = cc * getDutyRate(age, vehicleType);
+            const dutyRub = dutyEUR * rubRate * 0.92;
+            
+            const hpFeeEUR = hp * getHpFee(age);
+            const hpFeeRub = hpFeeEUR * rubRate * 0.92;
+            
+            // VAT 20%
+            const vat = (priceWithFee + dutyRub + hpFeeRub) * 0.20;
+            
+            // Additional fees
+            const delivery = 110000;
+            const clearance = 45000;
+            const processing = 60000;
+            const registration = 85000;
+            const broker = 85000;
+            const cert = 35000;
+            const agent = 170000;
+            
+            const total = priceWithFee + dutyRub + hpFeeRub + vat + delivery + clearance + processing + registration + broker + cert + agent;
+            
             document.getElementById('total').textContent = fmt(total);
             document.getElementById('step1').textContent = `${krw.toLocaleString('ru-RU')} KRW ÷ ${krwRate} = ${fmtUSD(priceUSD)}`;
             document.getElementById('step2').textContent = `${fmtUSD(priceUSD)} × ${rubRate} = ${fmt(priceRub)}`;
-            document.getElementById('step3').textContent = `${fmtUSD(priceUSD)} × ${currentData.eurRate} = ${fmtEUR(priceEur)}`;
+            document.getElementById('step3').textContent = `${fmt(priceRub)} + 1,500,000 = ${fmt(priceWithFee)}`;
             
             const ageNames = ['ДО 3 ЛЕТ', '3-5 ЛЕТ', '5-7 ЛЕТ', 'БОЛЕЕ 7 ЛЕТ'];
-            const ageLabels = ['до 3 лет', '3-5 лет', '5-7 лет', 'более 7 лет'];
             const typeNames = { petrol: 'Бензин/Дизель', hybrid: 'Гибрид', electric: 'Электро' };
-            const exciseRow = excise ? `<div><span class="label">Акциз</span><span class="value">+ ${fmt(excise)}</span></div>` : '';
-            const vatRow = vat ? `<div><span class="label">НДС 20%</span><span class="value">+ ${fmt(vat)}</span></div>` : '';
             
             let html = `
                 <div><span class="label">Тип</span><span class="value">${typeNames[vehicleType]}</span></div>
-                <div><span class="label">Цена в Корее</span><span class="value">${krw.toLocaleString('ru-RU')} KRW</span></div>
+                <div><span class="label">Цена</span><span class="value">${krw.toLocaleString('ru-RU')} KRW</span></div>
                 <div><span class="label">USD</span><span class="value">${fmtUSD(priceUSD)}</span></div>
-                <div><span class="label">EUR</span><span class="value">${fmtEUR(priceEur)}</span></div>
-                <div><span class="label">Цена в РФ</span><span class="value">${fmt(priceRub)}</span></div>
+                <div><span class="label">Курс USDT</span><span class="value">× ${rubRate}</span></div>
+                <div><span class="label">В рублях</span><span class="value">${fmt(priceRub)}</span></div>
+                <div><span class="label" style="color:#ffc800;">+ Фикс</span><span class="value" style="color:#ffc800;">+ ${fmt(fixedFee)}</span></div>
                 <div style="margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.1);">
                     <span class="label" style="color:#00d4ff;">${ageNames[age]}</span>
                 </div>
-                <div><span class="label">Пошлина</span><span class="value">+ ${fmt(dutyRub)} (${fmtEUR(dutyEur)})</span></div>
-                <div><span class="label">Оформление</span><span class="value">+ ${fmt(processing)}</span></div>
-                ${exciseRow}
-                <div><span class="label">Утильсбор</span><span class="value">+ ${fmt(util)}</span></div>
-                ${vatRow}
-                <div><span class="label">Паром (3 500 000 KRW)</span><span class="value">+ ${fmt(ferryRub)}</span></div>
-                <div><span class="label">Доставка по РФ</span><span class="value">+ ${fmt(deliveryRub)}</span></div>
-                <div><span class="label">Брокер</span><span class="value">+ ${fmt(broker)}</span></div>
+                <div><span class="label">Пошлина (${cc}см³)</span><span class="value">+ ${fmt(dutyRub)}</span></div>
+                <div><span class="label">За л.с. (${hp})</span><span class="value">+ ${fmt(hpFeeRub)}</span></div>
+                <div><span class="label">НДС 20%</span><span class="value">+ ${fmt(vat)}</span></div>
+                <div><span class="label">Доставка</span><span class="value">+ ${fmt(delivery)}</span></div>
+                <div><span class="label">Оформление</span><span class="value">+ ${fmt(clearance)}</span></div>
+                <div><span class="label">Регистрация</span><span class="value">+ ${fmt(registration)}</span></div>
                 <div class="total-row">
                     <span class="label">ИТОГО</span>
                     <span class="value">${fmt(total)}</span>
@@ -636,22 +489,18 @@
             
             document.getElementById('breakdown').innerHTML = html;
             
+            const ageLabels = ['до 3 лет', '3-5 лет', '5-7 лет', 'более 7 лет'];
             const copyText = `🚗 РАСЧЁТ АВТО ИЗ КОРЕИ
 
 📍 ${krw.toLocaleString('ru-RU')} KRW → ${fmtUSD(priceUSD)} → ${fmt(priceRub)}
-💶 ≈ ${fmtEUR(priceEur)}
+📦 + 1,500,000 = ${fmt(priceWithFee)}
 
 🚗 ${typeNames[vehicleType]} | ${cc}см³ | ${hp}л.с.
-📅 ${year} | ${ageLabels[age]}
-
-📦 Пошлина: ${fmt(dutyRub)}
-♻️ Утильсбор: ${fmt(util)}
-🚢 Паром: ${fmt(ferryRub)}
-🚛 Доставка по РФ: ${fmt(deliveryRub)}
+📅 ${year} | ${mileage.toLocaleString('ru-RU')} км | ${ageLabels[age]}
 
 💰 ИТОГО: ${fmt(total)}
 
-⚠️ Логика сводки: calcus.ru`;
+⚠️ tks.ru/auto/calc`;
 
             document.getElementById('copyText').textContent = copyText;
         }
