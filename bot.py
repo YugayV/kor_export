@@ -192,52 +192,18 @@ def set_rates(eur_usd, eur_rub, rub_usd):
     _last_update = datetime.now()
     return _cached_rates
 
-def get_age_category(year=None, age=None):
-    """Преобразуем год выпуска в таможенную возрастную категорию."""
-    if year not in (None, "", 0):
-        current_year = datetime.now().year
-        car_year = int(year)
-        age_years = max(0, current_year - car_year)
-        if age_years <= 2:
-            return 0
-        if age_years <= 5:
-            return 1
-        return 2
-
-    if age is not None:
-        return int(age)
-
-    return 0
-
 def get_customs_duty(cc, price_eur, age):
     if age == 0:
-        # Для авто до 3 лет пошлина считается как максимум
-        # между процентом от стоимости и минимальной ставкой за см3.
-        if price_eur <= 8500:
-            return max(price_eur * 0.54, cc * 2.5)
-        elif price_eur <= 16700:
-            return max(price_eur * 0.48, cc * 3.5)
-        elif price_eur <= 42300:
-            return max(price_eur * 0.48, cc * 5.5)
-        elif price_eur <= 84500:
-            return max(price_eur * 0.48, cc * 7.5)
-        elif price_eur <= 169000:
-            return max(price_eur * 0.48, cc * 15.0)
-        else:
-            return max(price_eur * 0.48, cc * 20.0)
+        return price_eur * 0.48
     elif age == 1:
-        if cc <= 1000:
-            return cc * 1.5
-        elif cc <= 1500:
+        if cc <= 1500:
             return cc * 1.7
-        elif cc <= 1800:
+        elif cc <= 1599:
             return cc * 2.5
-        elif cc <= 2300:
+        elif cc <= 2000:
             return cc * 2.7
-        elif cc <= 3000:
-            return cc * 3.0
         else:
-            return cc * 3.6
+            return cc * 3.0
     else:
         if cc <= 1000: return cc * 3.0
         elif cc <= 1500: return cc * 3.2
@@ -289,8 +255,7 @@ def calculate(data, rates):
     krw_price = data["price_krw"]
     cc = data["cc"]
     hp = data["hp"]
-    year = data.get("year")
-    age = get_age_category(year=year, age=data.get("age"))
+    age = data["age"]
     vtype = data["type"]
     krw_usd = data["krw_usd"]
     usd_rub = data["usd_rub"]
@@ -304,9 +269,13 @@ def calculate(data, rates):
     
     base_rub = price_rub
     
+    duty_eur = 0
     eur_rub = rates["EUR_RUB"]
-    duty_eur = get_customs_duty(cc, price_eur, age)
-    duty_rub = duty_eur * eur_rub
+    if age == 0:
+        duty_rub = price_rub * 0.48
+    else:
+        duty_eur = get_customs_duty(cc, price_eur, age)
+        duty_rub = duty_eur * eur_rub
     
     proc_fee = get_processing_fee(price_rub)
     excise = get_excise(hp, vtype)
@@ -324,7 +293,6 @@ def calculate(data, rates):
     
     return {
         "krw": krw_price, "usd": price_usd, "rub": price_rub, "eur": price_eur,
-        "year": year, "age": age,
         "duty_eur": duty_eur, "duty_rub": duty_rub,
         "proc": proc_fee, "excise": excise, "util": util, "vat": vat,
         "delivery_ship": delivery_ship, "delivery_rus": delivery_rub,
@@ -343,7 +311,7 @@ user_data = {}
     ("usd_rub", "Курс USD/RUB (пример: 92):"),
     ("cc", "Объём двигателя в см³ (пример: 2000):"),
     ("hp", "Мощность в л.с. (пример: 150):"),
-    ("year", "Год выпуска авто (пример: 2024):"),
+    ("age", "Возраст авто:\n0 — до 3 лет\n1 — 3-5 лет\n2 — более 5 лет"),
     ("type", "Тип двигателя:\n0 — Бензин/Дизель\n1 — Гибрид\n2 — Электро"),
     ("delivery_rub", "Доставка по России в ₽ (пример: 150000):"),
 ]
@@ -448,19 +416,17 @@ def handle(m):
     text = m.text.strip().replace(" ", "").replace(",", "")
     
     try:
-        if field in ["cc", "hp", "year", "type"]:
+        if field in ["cc", "hp", "age", "type"]:
             value = int(text)
         else:
             value = float(text)
 
+        if field == "age" and value not in range(len(ВОЗРАСТ)):
+            bot.reply_to(m, "⚠️ Возраст: введите 0, 1 или 2.\n\n" + prompt, parse_mode="HTML")
+            return
         if field == "type" and value not in range(len(ТИПЫ)):
             bot.reply_to(m, "⚠️ Тип: введите 0, 1 или 2.\n\n" + prompt, parse_mode="HTML")
             return
-        if field == "year":
-            current_year = datetime.now().year
-            if value < 1990 or value > current_year:
-                bot.reply_to(m, f"⚠️ Год: введите значение от 1990 до {current_year}.\n\n" + prompt, parse_mode="HTML")
-                return
         if field in ["krw_usd", "usd_rub"] and value <= 0:
             bot.reply_to(m, "⚠️ Курс должен быть больше 0.\n\n" + prompt, parse_mode="HTML")
             return
@@ -498,7 +464,7 @@ def handle(m):
                     f"📍 Цена: {fmt(result['krw'])} KRW → ${result['usd']:,.2f} → {fmt(result['rub'])} ₽\n"
                     f"💶 ≈ {fmt(result['eur'])} €\n\n"
                     f"⛽ {ТИПЫ[data['type']]}\n"
-                    f"📅 {data['year']} г. ({ВОЗРАСТ[result['age']]}) | 🚗 {data['cc']} см³ | 🐎 {data['hp']} л.с.\n\n"
+                    f"📅 {ВОЗРАСТ[data['age']]} | 🚗 {data['cc']} см³ | 🐎 {data['hp']} л.с.\n\n"
                     f"━━━━━━━━━━━━━━━━━━━━━━\n"
                     f"📦 <b>Таможня (calcus.ru):</b>\n"
                     f"  Пошлина ({fmt(result['duty_eur'])} €): {fmt(result['duty_rub'])} ₽\n"
@@ -635,8 +601,12 @@ DASHBOARD_HTML = '''
                     <input type="number" id="calc-hp" placeholder="150">
                 </div>
                 <div>
-                    <label>Год выпуска:</label>
-                    <input type="number" id="calc-year" placeholder="2024" min="1990" max="{{ current_year }}">
+                    <label>Возраст авто:</label>
+                    <select id="calc-age">
+                        <option value="0">до 3 лет</option>
+                        <option value="1">3-5 лет</option>
+                        <option value="2">более 5 лет</option>
+                    </select>
                     
                     <label>Тип двигателя:</label>
                     <select id="calc-type">
@@ -775,15 +745,10 @@ DASHBOARD_HTML = '''
                 usd_rub: parseFloat(document.getElementById('calc-usd-rub').value) || 0,
                 cc: parseInt(document.getElementById('calc-cc').value) || 0,
                 hp: parseInt(document.getElementById('calc-hp').value) || 0,
-                year: parseInt(document.getElementById('calc-year').value) || 0,
+                age: parseInt(document.getElementById('calc-age').value),
                 type: parseInt(document.getElementById('calc-type').value),
                 delivery_rub: parseFloat(document.getElementById('calc-delivery').value) || 0
             };
-
-            if (!data.year) {
-                alert('Введите год выпуска');
-                return;
-            }
             
             const response = await fetch('/api/calculate', {
                 method: 'POST',
@@ -817,8 +782,7 @@ def dashboard():
     return render_template_string(
         DASHBOARD_HTML,
         rates=rates,
-        last_update=_last_update.strftime('%Y-%m-%d %H:%M:%S') if _last_update else 'Нет данных',
-        current_year=datetime.now().year
+        last_update=_last_update.strftime('%Y-%m-%d %H:%M:%S') if _last_update else 'Нет данных'
     )
 
 @app.route('/api/rates', methods=['GET', 'POST'])
