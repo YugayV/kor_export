@@ -291,14 +291,14 @@ def get_rates():
         _last_update = now
     return _cached_rates
 
-def set_rates(eur_usd, eur_rub, rub_usd):
+def set_rates(eur_usd, eur_rub, usd_rub):
     """Устанавливаем курсы вручную"""
     global _cached_rates, _last_update
     _cached_rates = {
         "EUR_USD": float(eur_usd),
         "EUR_RUB": float(eur_rub),
-        "RUB_USD": float(rub_usd),
-        "USD_RUB": float(rub_usd),
+        "RUB_USD": float(usd_rub),
+        "USD_RUB": float(usd_rub),
         "KRW_USD": 1350.0,
         "CNY_USD": 7.0,
         "JPY_USD": 157.0,
@@ -523,15 +523,59 @@ def get_util_fee(power_kw, age_code, owner, engine_type, cc, calc_year):
     return round(amount * factor)
 
 
+def validate_normalized_input(data):
+    owner = int(data.get("owner", 1))
+    engine_type = int(data.get("type", 1))
+    power = float(data.get("power", 0))
+    power_unit = int(data.get("power_unit", 1))
+    cc = int(data.get("cc", 0) or 0)
+    price = float(data.get("price", 0))
+    calc_year = int(data.get("calc_year") or 2026)
+    age_code = get_age_code(year=data.get("year"), age=data.get("age"))
+    currency = (data.get("currency") or "KRW").upper()
+    krw_usd = float(data.get("krw_usd", 1350))
+    usd_rub = float(data.get("usd_rub", 92))
+    delivery_rub = float(data.get("delivery_rub", 0))
+    broker_rub = float(data.get("broker_rub", 100000))
+    ferry_krw = float(data.get("ferry_krw", 3500000))
+
+    if owner not in OWNER_LABELS:
+        raise ValueError("Некорректный тип владельца.")
+    if engine_type not in ENGINE_LABELS:
+        raise ValueError("Некорректный тип двигателя.")
+    if power <= 0:
+        raise ValueError("Мощность должна быть больше 0.")
+    if power_unit not in POWER_UNIT_LABELS:
+        raise ValueError("Некорректная единица мощности.")
+    if price <= 0:
+        raise ValueError("Стоимость автомобиля должна быть больше 0.")
+    if age_code not in AGE_LABELS:
+        raise ValueError("Некорректная возрастная категория.")
+    if currency not in CURRENCY_LABELS:
+        raise ValueError("Некорректная валюта.")
+    if calc_year not in UTIL_YEAR_FACTORS:
+        raise ValueError("Некорректный год расчёта утильсбора.")
+    if krw_usd <= 0 or usd_rub <= 0:
+        raise ValueError("Курсы валют должны быть больше 0.")
+    if delivery_rub < 0 or broker_rub < 0 or ferry_krw < 0:
+        raise ValueError("Дополнительные расходы не могут быть отрицательными.")
+    if engine_type in ELECTRIC_LIKE_ENGINES:
+        if cc < 0:
+            raise ValueError("Для электро объём не может быть отрицательным.")
+    elif cc <= 0:
+        raise ValueError("Для ДВС и параллельного гибрида объём должен быть больше 0.")
+
+
 def normalize_calculation_input(data):
     normalized = dict(data)
 
     if "price_krw" in normalized and "price" not in normalized:
         legacy_type = int(normalized.get("type", 0))
         legacy_engine_map = {
-            0: 1,  # benzine by default in legacy mode
+            0: 1,
             1: 6,  # old "hybrid" is closest to parallel hybrid
             2: 4,  # electric
+            3: 2,  # diesel
         }
         normalized = {
             "owner": int(normalized.get("owner", 1)),
@@ -566,6 +610,7 @@ def normalize_calculation_input(data):
         normalized["ferry_krw"] = float(normalized.get("ferry_krw", 3500000))
         normalized["age"] = get_age_code(age=normalized.get("age"))
 
+    validate_normalized_input(normalized)
     return normalized
 
 
@@ -656,7 +701,7 @@ user_data = {}
     ("cc", "Объём двигателя в см³ (пример: 2000):"),
     ("hp", "Мощность в л.с. (пример: 150):"),
     ("age", "Возраст авто:\n1 — до 3 лет\n2 — от 3 до 5 лет\n3 — от 5 до 7 лет\n4 — от 7 лет"),
-    ("type", "Тип двигателя:\n0 — Бензин/Дизель\n1 — Гибрид\n2 — Электро"),
+    ("type", "Тип двигателя:\n0 — Бензин\n1 — Гибрид\n2 — Электро\n3 — Дизель"),
     ("delivery_rub", "Доставка по России в ₽ (пример: 150000):"),
 ]
 
@@ -770,14 +815,17 @@ def handle(m):
         if field == "age" and value not in AGE_INPUT_MAP:
             bot.reply_to(m, "⚠️ Возраст: введите 1, 2, 3 или 4.\n\n" + prompt, parse_mode="HTML")
             return
-        if field == "type" and value not in [0, 1, 2]:
-            bot.reply_to(m, "⚠️ Тип: введите 0, 1 или 2.\n\n" + prompt, parse_mode="HTML")
+        if field == "type" and value not in [0, 1, 2, 3]:
+            bot.reply_to(m, "⚠️ Тип: введите 0, 1, 2 или 3.\n\n" + prompt, parse_mode="HTML")
             return
         if field in ["krw_usd", "usd_rub"] and value <= 0:
             bot.reply_to(m, "⚠️ Курс должен быть больше 0.\n\n" + prompt, parse_mode="HTML")
             return
-        if field in ["price_krw", "cc", "hp"] and value <= 0:
+        if field in ["price_krw", "hp"] and value <= 0:
             bot.reply_to(m, "⚠️ Значение должно быть больше 0.\n\n" + prompt, parse_mode="HTML")
+            return
+        if field == "cc" and value < 0:
+            bot.reply_to(m, "⚠️ Объём не может быть отрицательным.\n\n" + prompt, parse_mode="HTML")
             return
         if field == "delivery_rub" and value < 0:
             bot.reply_to(m, "⚠️ Доставка не может быть отрицательной.\n\n" + prompt, parse_mode="HTML")
@@ -805,16 +853,17 @@ def handle(m):
                 excise_str = f"  🚬 Акциз: {fmt(result['excise'])} ₽\n" if result["excise"] > 0 else ""
                 vat_str = f"  💸 НДС {int(result['vat_rate'] * 100)}%: {fmt(result['vat'])} ₽\n" if result["vat"] > 0 else ""
                 legacy_engine_names = {
-                    0: "Бензин/Дизель",
+                    0: "Бензин",
                     1: "Гибрид",
                     2: "Электро",
+                    3: "Дизель",
                 }
 
                 response = (
                     f"🚗 <b>Расчёт авто из Кореи</b>\n\n"
                     f"📍 Цена: {fmt(data['price_krw'])} KRW → ${result['price_usd']:,.2f} → {fmt(result['price_rub'])} ₽\n"
                     f"💶 ≈ {fmt(result['price_eur'])} €\n\n"
-                    f"⛽ {legacy_engine_names.get(int(data['type']), 'Бензин/Дизель')}\n"
+                    f"⛽ {legacy_engine_names.get(int(data['type']), 'Бензин')}\n"
                     f"📅 Возраст: {AGE_LABELS[result['age_code']]} | 🚗 {data['cc']} см³ | 🐎 {data['hp']} л.с.\n"
                     f"🔎 Внутри применена новая логика: {OWNER_LABELS[result['owner']]}, {ENGINE_LABELS[result['engine_type']]}\n\n"
                     f"━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -836,6 +885,10 @@ def handle(m):
                 )
 
                 bot.reply_to(m, response, parse_mode="HTML")
+                waiting[cid] = None
+                user_data[cid] = {}
+            except ValueError as e:
+                bot.reply_to(m, f"⚠️ {e}\n\n/reset — новый расчёт", parse_mode="HTML")
                 waiting[cid] = None
                 user_data[cid] = {}
             except Exception:
@@ -911,8 +964,8 @@ DASHBOARD_HTML = '''
                     <div class="rate-value" id="eur-rub">{{ "%.2f"|format(rates.EUR_RUB) }}</div>
                 </div>
                 <div class="rate-card">
-                    <div class="rate-label">RUB/USD</div>
-                    <div class="rate-value" id="rub-usd">{{ "%.2f"|format(rates.RUB_USD) }}</div>
+                    <div class="rate-label">USD/RUB</div>
+                    <div class="rate-value" id="usd-rub-rate">{{ "%.2f"|format(rates.USD_RUB) }}</div>
                 </div>
             </div>
             <p class="updated">Обновлено: {{ last_update }}</p>
@@ -929,8 +982,8 @@ DASHBOARD_HTML = '''
                 <input type="number" step="0.01" id="edit-eur-rub" value="{{ rates.EUR_RUB }}">
             </div>
             <div>
-                <label>RUB/USD:</label>
-                <input type="number" step="0.01" id="edit-rub-usd" value="{{ rates.RUB_USD }}">
+                <label>USD/RUB:</label>
+                <input type="number" step="0.01" id="edit-usd-rub" value="{{ rates.USD_RUB }}">
             </div>
             <button onclick="updateRates()">💾 Сохранить курсы</button>
             <button onclick="refreshRates()">🔄 Обновить из API</button>
@@ -966,9 +1019,10 @@ DASHBOARD_HTML = '''
 
                     <label>Тип двигателя:</label>
                     <select id="calc-type">
-                        <option value="0">Бензин/Дизель</option>
+                        <option value="0">Бензин</option>
                         <option value="1">Гибрид</option>
                         <option value="2">Электро</option>
+                        <option value="3">Дизель</option>
                     </select>
 
                     <label>Доставка по России (₽):</label>
@@ -1078,18 +1132,18 @@ DASHBOARD_HTML = '''
         async function updateRates() {
             const eurUsd = document.getElementById('edit-eur-usd').value;
             const eurRub = document.getElementById('edit-eur-rub').value;
-            const rubUsd = document.getElementById('edit-rub-usd').value;
+            const usdRub = document.getElementById('edit-usd-rub').value;
             
             const response = await fetch('/api/rates', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ eur_usd: eurUsd, eur_rub: eurRub, rub_usd: rubUsd })
+                body: JSON.stringify({ eur_usd: eurUsd, eur_rub: eurRub, usd_rub: usdRub })
             });
             
             const data = await response.json();
             document.getElementById('eur-usd').textContent = data.rates.EUR_USD.toFixed(2);
             document.getElementById('eur-rub').textContent = data.rates.EUR_RUB.toFixed(2);
-            document.getElementById('rub-usd').textContent = data.rates.RUB_USD.toFixed(2);
+            document.getElementById('usd-rub-rate').textContent = data.rates.USD_RUB.toFixed(2);
             alert('✅ Курсы обновлены!');
         }
 
@@ -1116,17 +1170,27 @@ DASHBOARD_HTML = '''
                 alert('Введите цену и мощность');
                 return;
             }
+
+            if (data.type !== 2 && data.cc <= 0) {
+                alert('Для бензина, дизеля и гибрида укажите объём двигателя');
+                return;
+            }
             
             const response = await fetch('/api/calculate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data)
             });
-            
+            if (!response.ok) {
+                const error = await response.json();
+                alert(error.error || 'Ошибка расчёта');
+                return;
+            }
+
             const result = await response.json();
             document.getElementById('calc-result').innerHTML = `
                 <div class="result-box">
-                    <div style="text-align: center; font-size: 1.2em; margin-bottom: 10px;">� Сравнение итогов</div>
+                    <div style="text-align: center; font-size: 1.2em; margin-bottom: 10px;">Сравнение итогов</div>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 15px;">
                         <div style="background: rgba(255,255,255,0.15); border-radius: 12px; padding: 16px;">
                             <div style="text-align: center; font-size: 1.05em; margin-bottom: 8px;">Calcus</div>
@@ -1172,7 +1236,7 @@ def dashboard():
 def api_rates():
     if request.method == 'POST':
         data = request.json
-        rates = set_rates(data['eur_usd'], data['eur_rub'], data['rub_usd'])
+        rates = set_rates(data['eur_usd'], data['eur_rub'], data['usd_rub'])
         return jsonify({"rates": rates})
     rates = get_rates()
     return jsonify({
@@ -1188,7 +1252,10 @@ def api_history():
 def api_calculate():
     data = request.json
     rates = get_rates()
-    result = calculate(data, rates)
+    try:
+        result = calculate(data, rates)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
     
     # Сохраняем расчет в историю
     calc_entry = {
