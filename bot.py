@@ -15,9 +15,37 @@ from flask import Flask, render_template_string, jsonify, request
 load_dotenv()
 APP_ROLE = (os.getenv("APP_ROLE") or "both").strip().lower()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+CALCUS_CLIENT_ID = os.getenv("CALCUS_CLIENT_ID")
+CALCUS_API_KEY = os.getenv("CALCUS_API_KEY")
 if not BOT_TOKEN and APP_ROLE != "web":
     raise ValueError("BOT_TOKEN не найден в переменных окружения!")
 bot = telebot.TeleBot(BOT_TOKEN or "0:0")
+
+
+def call_calcus_api(payload):
+    if not CALCUS_API_KEY:
+        raise ValueError("CALCUS_API_KEY не найден в переменных окружения!")
+
+    auth_variants = [
+        {"X-Client-Key": CALCUS_API_KEY, "X-Client-Id": CALCUS_CLIENT_ID or ""},
+        {"X-API-Key": CALCUS_API_KEY, "X-Client-Id": CALCUS_CLIENT_ID or ""},
+        {"Authorization": f"Bearer {CALCUS_API_KEY}", "X-Client-Id": CALCUS_CLIENT_ID or ""},
+    ]
+
+    last_error = "Не удалось авторизоваться в calcus.ru"
+    for auth_headers in auth_variants:
+        headers = {"Content-Type": "application/json"}
+        headers.update({k: v for k, v in auth_headers.items() if v})
+        try:
+            r = requests.post("https://calcus.ru/api/v1/Customs", json=payload, headers=headers, timeout=15)
+            if r.ok:
+                return r.json()
+            last_error = f"{r.status_code}: {r.text[:300]}"
+            if r.status_code not in (401, 403):
+                break
+        except requests.RequestException as e:
+            last_error = str(e)
+    raise RuntimeError(f"Ошибка calcus API: {last_error}")
 
 OWNER_LABELS = {
     1: "Физическое лицо (для личного использования)",
@@ -641,25 +669,32 @@ def calculate(data, rates):
     kw = get_power_kw(power, power_unit)
     price_usd = get_price_usd(price_value, currency, rates, krw_usd=krw_usd, usd_rub=usd_rub)
     price_rub = price_usd * usd_rub
-    price_eur = price_usd * float(rates["EUR_USD"])
     eur_rub = float(rates["EUR_RUB"])
 
-    duty_eur = get_customs_duty(owner, engine_type, cc, price_eur, age_code)
-    duty_rub = duty_eur * eur_rub
-    proc_fee = get_processing_fee(price_rub)
-    excise = get_excise(hp, owner, engine_type)
-    util = get_util_fee(kw, age_code, owner, engine_type, cc, calc_year)
+    calcus = call_calcus_api({
+        "owner": owner,
+        "age": age_code,
+        "engine": engine_type,
+        "power": power,
+        "power_unit": power_unit,
+        "value": cc,
+        "price": price_value,
+        "curr": currency,
+        "year": calc_year,
+    })
 
-    if owner == 2 or engine_type in ELECTRIC_LIKE_ENGINES:
-        vat_rate = 0.22
-        vat = (price_rub + duty_rub + excise) * vat_rate
-    else:
-        vat_rate = 0.0
-        vat = 0.0
+    duty_rub = float(calcus.get("tax") or 0)
+    proc_fee = float(calcus.get("sbor") or 0)
+    excise = float(calcus.get("excise") or 0)
+    util = float(calcus.get("util") or 0)
+    vat = float(calcus.get("nds") or 0)
+    vat_rate = 0.20 if vat > 0 else 0.0
+    duty_eur = duty_rub / eur_rub if eur_rub else 0.0
+    price_eur = price_rub / eur_rub if eur_rub else 0.0
 
-    delivery_ship = (ferry_krw / krw_usd) * usd_rub
     customs_total = duty_rub + proc_fee + excise + util + vat
-    calcus_total = price_rub + customs_total
+    calcus_total = float(calcus.get("total2") or (price_rub + customs_total))
+    delivery_ship = (ferry_krw / krw_usd) * usd_rub
     total = calcus_total + delivery_ship + delivery_rub + broker
     total_delta = total - calcus_total
 
