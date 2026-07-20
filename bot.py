@@ -565,11 +565,8 @@ def validate_normalized_input(data):
         raise ValueError("Курсы валют должны быть больше 0.")
     if delivery_rub < 0 or broker_rub < 0 or ferry_krw < 0:
         raise ValueError("Дополнительные расходы не могут быть отрицательными.")
-    if engine_type in ELECTRIC_LIKE_ENGINES:
-        if cc < 0:
-            raise ValueError("Для электро объём не может быть отрицательным.")
-    elif cc <= 0:
-        raise ValueError("Для ДВС и параллельного гибрида объём должен быть больше 0.")
+    if cc < 0:
+        raise ValueError("Объём двигателя не может быть отрицательным.")
 
 
 def normalize_calculation_input(data):
@@ -631,11 +628,11 @@ def calculate(data, rates):
     age_code = get_age_code(age=data.get("age"))
     currency = (data.get("currency") or "KRW").upper()
     price_value = float(data["price"])
-    krw_usd = float(data.get("krw_usd") or rates.get("KRW_USD") or 1350.0)
-    usd_rub = float(data.get("usd_rub") or rates.get("USD_RUB") or rates.get("RUB_USD") or 92.0)
-    delivery_rub = float(data.get("delivery_rub") or 0)
-    broker = float(data.get("broker_rub") or 100000)
-    ferry_krw = float(data.get("ferry_krw") or 3500000)
+    krw_usd = float(data["krw_usd"])
+    usd_rub = float(data["usd_rub"])
+    delivery_rub = float(data["delivery_rub"])
+    broker = float(data["broker_rub"])
+    ferry_krw = float(data["ferry_krw"])
 
     hp = get_power_hp(power, power_unit)
     kw = get_power_kw(power, power_unit)
