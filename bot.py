@@ -15,37 +15,9 @@ from flask import Flask, render_template_string, jsonify, request
 load_dotenv()
 APP_ROLE = (os.getenv("APP_ROLE") or "both").strip().lower()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-CALCUS_CLIENT_ID = os.getenv("CALCUS_CLIENT_ID")
-CALCUS_API_KEY = os.getenv("CALCUS_API_KEY")
 if not BOT_TOKEN and APP_ROLE != "web":
     raise ValueError("BOT_TOKEN не найден в переменных окружения!")
 bot = telebot.TeleBot(BOT_TOKEN or "0:0")
-
-
-def call_calcus_api(payload):
-    if not CALCUS_API_KEY:
-        raise ValueError("CALCUS_API_KEY не найден в переменных окружения!")
-
-    auth_variants = [
-        {"X-Client-Key": CALCUS_API_KEY, "X-Client-Id": CALCUS_CLIENT_ID or ""},
-        {"X-API-Key": CALCUS_API_KEY, "X-Client-Id": CALCUS_CLIENT_ID or ""},
-        {"Authorization": f"Bearer {CALCUS_API_KEY}", "X-Client-Id": CALCUS_CLIENT_ID or ""},
-    ]
-
-    last_error = "Не удалось авторизоваться в calcus.ru"
-    for auth_headers in auth_variants:
-        headers = {"Content-Type": "application/json"}
-        headers.update({k: v for k, v in auth_headers.items() if v})
-        try:
-            r = requests.post("https://calcus.ru/api/v1/Customs", json=payload, headers=headers, timeout=15)
-            if r.ok:
-                return r.json()
-            last_error = f"{r.status_code}: {r.text[:300]}"
-            if r.status_code not in (401, 403):
-                break
-        except requests.RequestException as e:
-            last_error = str(e)
-    raise RuntimeError(f"Ошибка calcus API: {last_error}")
 
 OWNER_LABELS = {
     1: "Физическое лицо (для личного использования)",
@@ -593,11 +565,8 @@ def validate_normalized_input(data):
         raise ValueError("Курсы валют должны быть больше 0.")
     if delivery_rub < 0 or broker_rub < 0 or ferry_krw < 0:
         raise ValueError("Дополнительные расходы не могут быть отрицательными.")
-    if engine_type in ELECTRIC_LIKE_ENGINES:
-        if cc < 0:
-            raise ValueError("Для электро объём не может быть отрицательным.")
-    elif cc <= 0:
-        raise ValueError("Для ДВС и параллельного гибрида объём должен быть больше 0.")
+    if cc < 0:
+        raise ValueError("Объём двигателя не может быть отрицательным.")
 
 
 def normalize_calculation_input(data):
@@ -659,41 +628,34 @@ def calculate(data, rates):
     age_code = get_age_code(age=data.get("age"))
     currency = (data.get("currency") or "KRW").upper()
     price_value = float(data["price"])
-    krw_usd = float(data.get("krw_usd") or rates.get("KRW_USD") or 1350.0)
-    usd_rub = float(data.get("usd_rub") or rates.get("USD_RUB") or rates.get("RUB_USD") or 92.0)
-    delivery_rub = float(data.get("delivery_rub") or 0)
-    broker = float(data.get("broker_rub") or 100000)
-    ferry_krw = float(data.get("ferry_krw") or 3500000)
+    krw_usd = float(data["krw_usd"])
+    usd_rub = float(data["usd_rub"])
+    delivery_rub = float(data["delivery_rub"])
+    broker = float(data["broker_rub"])
+    ferry_krw = float(data["ferry_krw"])
 
     hp = get_power_hp(power, power_unit)
     kw = get_power_kw(power, power_unit)
     price_usd = get_price_usd(price_value, currency, rates, krw_usd=krw_usd, usd_rub=usd_rub)
     price_rub = price_usd * usd_rub
     eur_rub = float(rates["EUR_RUB"])
-
-    calcus = call_calcus_api({
-        "owner": owner,
-        "age": age_code,
-        "engine": engine_type,
-        "power": power,
-        "power_unit": power_unit,
-        "value": cc,
-        "price": price_value,
-        "curr": currency,
-        "year": calc_year,
-    })
-
-    duty_rub = float(calcus.get("tax") or 0)
-    proc_fee = float(calcus.get("sbor") or 0)
-    excise = float(calcus.get("excise") or 0)
-    util = float(calcus.get("util") or 0)
-    vat = float(calcus.get("nds") or 0)
-    vat_rate = 0.20 if vat > 0 else 0.0
-    duty_eur = duty_rub / eur_rub if eur_rub else 0.0
     price_eur = price_rub / eur_rub if eur_rub else 0.0
 
+    duty_eur = get_customs_duty(owner, engine_type, cc, price_eur, age_code)
+    duty_rub = duty_eur * eur_rub
+    proc_fee = get_processing_fee(price_rub)
+    excise = get_excise(hp, owner, engine_type)
+    util = get_util_fee(kw, age_code, owner, engine_type, cc, calc_year)
+
+    if owner == 2 or engine_type in ELECTRIC_LIKE_ENGINES:
+        vat_rate = 0.22
+        vat = (price_rub + duty_rub + excise) * vat_rate
+    else:
+        vat_rate = 0.0
+        vat = 0.0
+
     customs_total = duty_rub + proc_fee + excise + util + vat
-    calcus_total = float(calcus.get("total2") or (price_rub + customs_total))
+    calcus_total = price_rub + customs_total
     delivery_ship = (ferry_krw / krw_usd) * usd_rub
     total = calcus_total + delivery_ship + delivery_rub + broker
     total_delta = total - calcus_total
@@ -791,8 +753,8 @@ def start(m):
     bot.reply_to(
         m,
         f"🚗 <b>Калькулятор авто из Кореи</b>\n"
-        f"Старая форма ввода сохранена, но таможенная логика обновлена по <b>calcus.ru</b>.\n"
-        f"Отдельно показывается таможня как у calcus и итог по старому сценарию с паромом, доставкой и брокером.\n\n"
+        f"Таможенные платежи считаются по действующим ставкам ФТС (пошлина, утильсбор, акциз, НДС).\n"
+        f"Отдельно показывается сумма с таможней и итог с паромом, доставкой и брокером.\n\n"
         f"💶 EUR/RUB: {rates['EUR_RUB']:.2f}\n"
         f"Обновлено: {_last_update.strftime('%Y-%m-%d %H:%M:%S') if _last_update else 'Нет данных'}\n\n"
         f"Выберите действие кнопками ниже:",
@@ -906,22 +868,21 @@ def handle(m):
                     f"💶 ≈ {fmt(result['price_eur'])} €\n\n"
                     f"⛽ {legacy_engine_names.get(int(data['type']), 'Бензин')}\n"
                     f"📅 Возраст: {AGE_LABELS[result['age_code']]} | 🚗 {data['cc']} см³ | 🐎 {data['hp']} л.с.\n"
-                    f"🔎 Внутри применена новая логика: {OWNER_LABELS[result['owner']]}, {ENGINE_LABELS[result['engine_type']]}\n\n"
+                    f"🔎 {OWNER_LABELS[result['owner']]}, {ENGINE_LABELS[result['engine_type']]}\n\n"
                     f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                    f"📦 <b>Таможня как calcus.ru:</b>\n"
+                    f"📦 <b>Таможенные платежи:</b>\n"
                     f"  Пошлина ({fmt(result['duty_eur'])} €): {fmt(result['duty_rub'])} ₽\n"
                     f"  Оформление: {fmt(result['proc'])} ₽\n"
                     f"{excise_str}"
                     f"  ♻️ Утильсбор: {fmt(result['util'])} ₽\n"
                     f"{vat_str}"
                     f"  Итого таможня: {fmt(result['customs_total'])} ₽\n"
-                    f"  <b>Полный итог как calcus: {fmt(result['calcus_total'])} ₽</b>\n"
+                    f"  <b>Цена + таможня: {fmt(result['calcus_total'])} ₽</b>\n"
                     f"━━━━━━━━━━━━━━━━━━━━━━\n"
                     f"🚢 Паром (3 500 000 KRW): +{fmt(result['delivery_ship'])} ₽\n"
                     f"🚛 Доставка по России: +{fmt(result['delivery_rus'])} ₽\n"
-                    f"🔗 Брокер: +{fmt(result['broker'])} ₽\n"
-                    f"📊 Разница с calcus: +{fmt(result['total_delta'])} ₽\n\n"
-                    f"💰 <b>ИТОГ ПО СТАРОМУ БОТУ: {fmt(result['total'])} ₽</b>\n\n"
+                    f"🔗 Брокер: +{fmt(result['broker'])} ₽\n\n"
+                    f"💰 <b>ИТОГО ПОД КЛЮЧ: {fmt(result['total'])} ₽</b>\n\n"
                     f"/reset — новый расчёт"
                 )
 
@@ -1231,14 +1192,14 @@ DASHBOARD_HTML = '''
             const result = await response.json();
             document.getElementById('calc-result').innerHTML = `
                 <div class="result-box">
-                    <div style="text-align: center; font-size: 1.2em; margin-bottom: 10px;">Сравнение итогов</div>
+                    <div style="text-align: center; font-size: 1.2em; margin-bottom: 10px;">Результат расчёта</div>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 15px;">
                         <div style="background: rgba(255,255,255,0.15); border-radius: 12px; padding: 16px;">
-                            <div style="text-align: center; font-size: 1.05em; margin-bottom: 8px;">Calcus</div>
+                            <div style="text-align: center; font-size: 1.05em; margin-bottom: 8px;">Цена + таможня</div>
                             <div class="result-value" style="font-size: 1.8em;">${Math.round(result.calcus_total).toLocaleString()} ₽</div>
                         </div>
                         <div style="background: rgba(255,255,255,0.15); border-radius: 12px; padding: 16px;">
-                            <div style="text-align: center; font-size: 1.05em; margin-bottom: 8px;">U nas</div>
+                            <div style="text-align: center; font-size: 1.05em; margin-bottom: 8px;">Итого под ключ</div>
                             <div class="result-value" style="font-size: 1.8em;">${Math.round(result.total).toLocaleString()} ₽</div>
                         </div>
                     </div>
@@ -1246,10 +1207,7 @@ DASHBOARD_HTML = '''
                         Цена: ${Math.round(data.price_krw).toLocaleString()} KRW → ${result.price_usd.toFixed(2)} USD → ${Math.round(result.price_rub).toLocaleString()} ₽
                     </div>
                     <div style="margin-top: 10px; text-align: center; font-size: 1.05em;">
-                        Таможня как calcus: ${Math.round(result.customs_total).toLocaleString()} ₽
-                    </div>
-                    <div style="margin-top: 8px; text-align: center; font-size: 1.05em;">
-                        Разница: +${Math.round(result.total_delta).toLocaleString()} ₽
+                        Таможенные платежи: ${Math.round(result.customs_total).toLocaleString()} ₽
                     </div>
                 </div>
             `;
