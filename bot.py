@@ -684,7 +684,11 @@ def calculate(data, rates):
         vat_rate = 0.22 if vat > 0 else 0.0
         duty_eur = duty_rub / eur_rub if eur_rub else 0.0
         customs_total = duty_rub + proc_fee + excise + util + vat
-        calcus_total = float(calcus.get("total2") or (price_rub + customs_total))
+        # Не берём calcus.get("total2") — он считает цену авто по своему
+        # внутреннему курсу валют, который не совпадает с курсом, который
+        # ввёл пользователь и который показан в "Цена" выше. Складываем
+        # сами, чтобы "Цена + таможня" совпадала с показанными цифрами.
+        calcus_total = price_rub + customs_total
     else:
         duty_eur = get_customs_duty(owner, engine_type, cc, price_eur, age_code)
         duty_rub = duty_eur * eur_rub
